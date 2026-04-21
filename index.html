@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>10.2 Venn and Carroll Diagrams</title>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: #0b1e3d;
+      /* No overflow:hidden — allow natural page scroll so nav is never hidden */
+    }
+    button, input { font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    /* ── Math logic ──────────────────────────────────────────────────────────── */
+    const VENN_NUMS    = Array.from({ length: 20 }, (_, i) => i + 1);
+    const CARROLL_NUMS = [15, 11, 10, 16, 18, 21, 20, 22, 12, 24, 17, 23];
+
+    const vennZoneOf = (n) => {
+      const a = n % 2 === 0, b = n % 3 === 0;
+      if (a && b) return "both";
+      if (a)      return "onlyA";
+      if (b)      return "onlyB";
+      return "outside";
+    };
+
+    const carrollCellOf = (n) => {
+      const e = n % 2 === 0, m = n % 3 === 0;
+      if (e  && m)  return "em";
+      if (e  && !m) return "en";
+      if (!e && m)  return "nm";
+      return "nn";
+    };
+
+    const CHIP_COLORS = [
+      "#FF6B6B","#FFD93D","#6BCB77","#4D96FF","#FF922B",
+      "#CC5DE8","#20C997","#F06595","#74C0FC","#A9E34B",
+      "#FF8787","#FFE066","#8CE99A","#91A7FF","#FFC078",
+      "#DA77F2","#63E6BE","#F783AC","#4DABF7","#C0EB75",
+    ];
+    const chipColor = (n) => CHIP_COLORS[(n - 1) % CHIP_COLORS.length];
+
+    /* ── Shared styles ───────────────────────────────────────────────────────── */
+    const S = {
+      app: {
+        display: "flex", minHeight: "100vh", width: "100%",
+        fontFamily: "'Nunito', 'Segoe UI', sans-serif",
+        background: "#0b1e3d",
+        backgroundImage: `
+          linear-gradient(rgba(0,180,255,0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,180,255,0.06) 1px, transparent 1px)`,
+        backgroundSize: "40px 40px",
+      },
+      /* Sticky nav — always visible during page scroll */
+      nav: {
+        position: "sticky", top: 0, alignSelf: "flex-start",
+        width: 88, minWidth: 88, height: "100vh", overflowY: "auto",
+        background: "#071530", borderRight: "2px solid #1a3a6e",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", paddingTop: 16, gap: 8,
+        zIndex: 100, boxShadow: "4px 0 20px rgba(0,0,0,0.4)",
+      },
+      navLogo: {
+        width: 56, height: 56, borderRadius: 16,
+        background: "linear-gradient(135deg,#00c6ff,#0072ff)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 26, marginBottom: 12, boxShadow: "0 4px 15px rgba(0,114,255,0.5)",
+        flexShrink: 0,
+      },
+      navBtn: (active) => ({
+        width: 72, borderRadius: 14, padding: "10px 4px",
+        cursor: "pointer", border: "none", flexShrink: 0,
+        background: active ? "linear-gradient(135deg,#00c6ff22,#0072ff33)" : "transparent",
+        borderLeft: active ? "3px solid #00c6ff" : "3px solid transparent",
+        color: active ? "#00e5ff" : "#4a7aad",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        transition: "all .2s", fontSize: 10, fontWeight: 700,
+        letterSpacing: 0.5, textTransform: "uppercase",
+      }),
+      navIcon: { fontSize: 24 },
+      content: {
+        flex: 1, padding: "24px 28px",
+        display: "flex", flexDirection: "column", gap: 20,
+      },
+      header: {
+        background: "linear-gradient(135deg,#0d2e6b,#0a3d7a)",
+        border: "1px solid #1e4d9a", borderRadius: 18, padding: "18px 28px",
+        display: "flex", alignItems: "center", gap: 16,
+        boxShadow: "0 4px 24px rgba(0,100,255,0.15)",
+      },
+      headerBadge: {
+        background: "linear-gradient(135deg,#00c6ff,#0072ff)", color: "#fff",
+        borderRadius: 12, padding: "4px 14px", fontSize: 12, fontWeight: 800,
+        letterSpacing: 1, textTransform: "uppercase",
+      },
+      headerTitle: { color: "#fff", fontSize: 22, fontWeight: 800, margin: 0 },
+      headerSub:   { color: "#7fb3e0", fontSize: 13, margin: "2px 0 0 0" },
+      card: {
+        background: "rgba(13,40,90,0.7)", border: "1px solid #1a4080",
+        borderRadius: 18, padding: "20px 24px",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.3)", backdropFilter: "blur(8px)",
+      },
+      sectionTitle: {
+        color: "#00e5ff", fontSize: 13, fontWeight: 800, letterSpacing: 2,
+        textTransform: "uppercase", margin: "0 0 6px 0",
+      },
+      instruction: { color: "#a8c8f0", fontSize: 15, lineHeight: 1.6, margin: "0 0 16px 0" },
+      chip: (n, selected, status) => ({
+        width: 52, height: 52, borderRadius: 14,
+        border: selected          ? "3px solid #fff"
+              : status==="correct" ? "3px solid #2ecc71"
+              : status==="wrong"   ? "3px solid #e74c3c"
+              :                      "2px solid rgba(255,255,255,0.15)",
+        background: status==="correct" ? "#1a5e33"
+                  : status==="wrong"   ? "#5e1a1a"
+                  :                      `${chipColor(n)}22`,
+        color: status ? "#fff" : chipColor(n),
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 17, fontWeight: 900, cursor: "pointer", userSelect: "none",
+        transform: selected ? "scale(1.15)" : "scale(1)",
+        transition: "all .15s",
+        boxShadow: selected ? `0 0 18px ${chipColor(n)}99` : "0 2px 8px rgba(0,0,0,0.3)",
+        flexShrink: 0,
+      }),
+      bin: {
+        background: "rgba(0,30,70,0.5)", border: "2px dashed #2a5090",
+        borderRadius: 16, padding: "14px 16px",
+        display: "flex", flexWrap: "wrap", gap: 10,
+        minHeight: 80, alignItems: "flex-start",
+      },
+      zoneBox: (highlight, color) => ({
+        flex: 1, minHeight: 100, borderRadius: 14,
+        border:  highlight ? `2px solid ${color}` : "1px solid #1e4080",
+        background: highlight ? `${color}0d` : "rgba(0,20,60,0.4)",
+        display: "flex", flexWrap: "wrap", gap: 8,
+        alignItems: "flex-start", padding: 10, cursor: "pointer",
+        transition: "all .2s",
+        boxShadow: highlight ? `0 0 16px ${color}44` : "none",
+        position: "relative", minWidth: 120,
+      }),
+      zoneLabel: {
+        position: "absolute", top: 6, left: 10, fontSize: 10, fontWeight: 800,
+        letterSpacing: 1, textTransform: "uppercase", pointerEvents: "none",
+      },
+      zonePlaceholder: {
+        color: "#2a5090", fontSize: 12, fontStyle: "italic",
+        margin: "auto", paddingTop: 20,
+      },
+      checkBtn: {
+        background: "linear-gradient(135deg,#00c6ff,#0072ff)", color: "#fff",
+        border: "none", borderRadius: 14, padding: "14px 32px",
+        fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: 0.5,
+        boxShadow: "0 4px 16px rgba(0,114,255,0.4)", transition: "all .2s",
+      },
+      resetBtn: {
+        background: "rgba(255,107,107,0.15)", color: "#ff9f9f",
+        border: "1px solid #ff6b6b44", borderRadius: 14, padding: "14px 24px",
+        fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all .2s",
+      },
+      score: (ok) => ({
+        padding: "10px 20px", borderRadius: 12,
+        background: ok ? "rgba(46,204,113,0.15)" : "rgba(231,76,60,0.15)",
+        border: `1px solid ${ok ? "#2ecc7144" : "#e74c3c44"}`,
+        color: ok ? "#2ecc71" : "#e74c3c", fontWeight: 700, fontSize: 15,
+      }),
+      carrollTable: {
+        width: "100%", borderCollapse: "separate", borderSpacing: 0,
+        borderRadius: 14, overflow: "hidden", border: "1px solid #1e4080",
+      },
+      carrollTh: (variant) => ({
+        background: variant === "even"
+          ? "linear-gradient(135deg,#0d3d8c,#0a5299)"
+          : variant === "odd"
+          ? "linear-gradient(135deg,#6b2d0d,#995209)"
+          : "linear-gradient(135deg,#0a2d6b,#083a8a)",
+        color: "#fff", padding: "14px 20px", fontSize: 14, fontWeight: 800,
+        textAlign: "center", letterSpacing: 0.5,
+        borderBottom: "1px solid #1e4080",
+        borderRight: variant === "even" ? "1px solid #1e4080" : "none",
+      }),
+      carrollTd: (highlight) => ({
+        verticalAlign: "top", padding: 10, border: "1px solid #1e4080",
+        background: highlight ? "rgba(0,229,255,0.06)" : "rgba(0,20,60,0.4)",
+        cursor: "pointer", minHeight: 100, minWidth: 120,
+        transition: "background .2s",
+      }),
+      rowHeader: {
+        background: "linear-gradient(135deg,#0a2d6b,#083a8a)",
+        color: "#fff", padding: "12px 16px", fontSize: 13, fontWeight: 800,
+        textAlign: "center", borderRight: "1px solid #1e4080",
+        writingMode: "horizontal-tb",
+      },
+    };
+
+    /* ── Chip component ──────────────────────────────────────────────────────── */
+    function Chip({ n, isSelected, status, onClick }) {
+      return (
+        <div style={S.chip(n, isSelected, status)} onClick={onClick} title={`Number ${n}`}>
+          {n}
+        </div>
+      );
+    }
+
+    /* ── SVG answer-key numbers for Venn diagram ─────────────────────────────── */
+    /*
+     * Circle geometry (viewBox 0 0 740 350):
+     *   Circle A: cx=250, cy=175, r=155  →  x: 95–405
+     *   Circle B: cx=480, cy=175, r=155  →  x: 325–635
+     *   Intersection strip: x=325–405, width=80px  ✓ visually clear overlap
+     */
+    const VENN_SVG_POSITIONS = (() => {
+      const pos = {};
+      // onlyA  (2,4,8,10,14,16,20) — 7 numbers
+      // layout: 3 cols × 3 rows, anchored at (135, 125), spacing 36
+      const onlyA = VENN_NUMS.filter(n => vennZoneOf(n) === "onlyA");
+      onlyA.forEach((n, i) => {
+        const col = i % 3, row = Math.floor(i / 3);
+        pos[n] = { x: 135 + col * 36, y: 125 + row * 36, zone: "onlyA" };
+      });
+      // both (6,12,18) — 3 numbers
+      // single column in the intersection lens, starting y=140
+      const both = VENN_NUMS.filter(n => vennZoneOf(n) === "both");
+      both.forEach((n, i) => {
+        pos[n] = { x: 365, y: 140 + i * 36, zone: "both" };
+      });
+      // onlyB (3,9,15) — 3 numbers
+      const onlyB = VENN_NUMS.filter(n => vennZoneOf(n) === "onlyB");
+      onlyB.forEach((n, i) => {
+        pos[n] = { x: 545, y: 140 + i * 36, zone: "onlyB" };
+      });
+      // outside (1,5,7,11,13,17,19) — 7 numbers
+      // place in left & right margins (outside both circles)
+      const outside = VENN_NUMS.filter(n => vennZoneOf(n) === "outside");
+      const outsideXY = [
+        [42,80],[42,135],[42,190],[42,245],
+        [698,80],[698,135],[698,190],
+      ];
+      outside.forEach((n, i) => {
+        const [x, y] = outsideXY[i] || [42, 300];
+        pos[n] = { x, y, zone: "outside" };
+      });
+      return pos;
+    })();
+
+    const ZONE_COLOR = {
+      onlyA:   "#4D96FF",
+      both:    "#20C997",
+      onlyB:   "#FF922B",
+      outside: "#aaaaaa",
+    };
+
+    /* ── Venn Activity ───────────────────────────────────────────────────────── */
+    function VennActivity() {
+      const [bin,   setBin]   = useState([...VENN_NUMS]);
+      const [zones, setZones] = useState({ onlyA:[], both:[], onlyB:[], outside:[] });
+      const [sel,   setSel]   = useState(null);     // { num, from, fromKey }
+      const [feedback,    setFeedback]    = useState(null);  // map num→'correct'|'wrong'
+      const [showAnswers, setShowAnswers] = useState(false);
+
+      const handleChipClick = (num, from, fromKey) => {
+        if (feedback) return;
+        if (sel && sel.num === num && sel.from === from && sel.fromKey === fromKey) {
+          setSel(null); return;
+        }
+        setSel({ num, from, fromKey });
+      };
+
+      const handleZoneClick = (zoneKey) => {
+        if (!sel || feedback) return;
+        const { num, from, fromKey } = sel;
+        if (from === "bin")
+          setBin(b => b.filter(x => x !== num));
+        else
+          setZones(z => ({ ...z, [fromKey]: z[fromKey].filter(x => x !== num) }));
+
+        if (zoneKey === "bin")
+          setBin(b => [...b, num].sort((a, b) => a - b));
+        else
+          setZones(z => ({ ...z, [zoneKey]: [...z[zoneKey], num] }));
+        setSel(null);
+      };
+
+      const check = () => {
+        const result = {};
+        ["onlyA","both","onlyB","outside"].forEach(zk => {
+          zones[zk].forEach(n => {
+            result[n] = vennZoneOf(n) === zk ? "correct" : "wrong";
+          });
+        });
+        setFeedback(result);
+        setTimeout(() => {
+          const wrong = Object.entries(result)
+            .filter(([, v]) => v === "wrong")
+            .map(([k]) => +k);
+          if (wrong.length > 0) {
+            setZones(z => {
+              const nz = { onlyA:[...z.onlyA], both:[...z.both], onlyB:[...z.onlyB], outside:[...z.outside] };
+              ["onlyA","both","onlyB","outside"].forEach(k => {
+                nz[k] = nz[k].filter(n => !wrong.includes(n));
+              });
+              return nz;
+            });
+            setBin(b => [...b, ...wrong].sort((a, b) => a - b));
+          }
+          setFeedback(null);
+        }, 2000);
+      };
+
+      const reset = () => {
+        setBin([...VENN_NUMS]);
+        setZones({ onlyA:[], both:[], onlyB:[], outside:[] });
+        setSel(null); setFeedback(null); setShowAnswers(false);
+      };
+
+      const placed  = Object.values(zones).flat().length;
+      const correct = feedback
+        ? Object.values(feedback).filter(v => v === "correct").length
+        : 0;
+
+      const zoneConfig = [
+        { key:"onlyA",   label:"Multiples of 2 ONLY", color:"#4D96FF" },
+        { key:"both",    label:"BOTH (× 2 and × 3)",  color:"#20C997" },
+        { key:"onlyB",   label:"Multiples of 3 ONLY", color:"#FF922B" },
+        { key:"outside", label:"OUTSIDE — Neither",   color:"#aaaaaa" },
+      ];
+
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+          {/* ── Intro card ── */}
+          <div style={S.card}>
+            <p style={S.sectionTitle}>Activity 1 — The Venn Master</p>
+            <p style={S.instruction}>
+              👆 <strong style={{color:"#fff"}}>Tap a number</strong> to select it (it glows).
+              Then <strong style={{color:"#fff"}}>tap a zone</strong> below to place it.
+              Sort all numbers <strong style={{color:"#fff"}}>1–20</strong> into the correct circle zone!
+            </p>
+            <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+              {[{label:"Multiples of 2",  ex:"2, 4, 6…",    color:"#4D96FF"},
+                {label:"Multiples of 3",  ex:"3, 6, 9…",    color:"#FF922B"},
+                {label:"Both (×2 & ×3)", ex:"6, 12, 18…", color:"#20C997"},
+                {label:"Neither",         ex:"1, 5, 7…",    color:"#aaa"}]
+                .map(({label,ex,color}) => (
+                  <div key={label} style={{
+                    background:`${color}18`, border:`1px solid ${color}44`,
+                    borderRadius:10, padding:"6px 14px",
+                  }}>
+                    <span style={{color, fontWeight:800, fontSize:13}}>{label}</span>
+                    <span style={{color:"#6a9acc", fontSize:12}}> — e.g. {ex}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {/* ── Venn SVG ── */}
+          <div style={{ ...S.card, padding:14 }}>
+            <div style={{
+              display:"flex", justifyContent:"space-between",
+              alignItems:"center", marginBottom:10,
+            }}>
+              <p style={{ ...S.sectionTitle, margin:0 }}>📊 Venn Diagram</p>
+              <button
+                onClick={() => setShowAnswers(v => !v)}
+                style={{
+                  background: showAnswers
+                    ? "linear-gradient(135deg,#FFD93D,#FF922B)"
+                    : "linear-gradient(135deg,#6BCB77,#20C997)",
+                  color:"#fff", border:"none", borderRadius:12,
+                  padding:"8px 18px", fontSize:13, fontWeight:800, cursor:"pointer",
+                  boxShadow:"0 2px 10px rgba(0,0,0,0.3)",
+                }}>
+                {showAnswers ? "🙈 Hide Answers" : "📋 Reveal Answers"}
+              </button>
+            </div>
+
+            {/*
+             * Fixed Venn SVG circles:
+             *   Circle A: cx=250, cy=175, r=155
+             *   Circle B: cx=480, cy=175, r=155
+             *   Distance between centres = 230 < 310 (sum of radii) → circles OVERLAP ✓
+             *   Intersection spans x=325–405 (width=80 px) — clearly visible lens shape
+             */}
+            <svg viewBox="0 0 740 350" style={{ width:"100%", display:"block" }}>
+              <defs>
+                <filter id="glowA">
+                  <feGaussianBlur stdDeviation="5" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                {/* ClipPath of circle B — used to paint the intersection teal */}
+                <clipPath id="clipB">
+                  <circle cx="480" cy="175" r="155"/>
+                </clipPath>
+              </defs>
+
+              {/* Outer boundary rectangle */}
+              <rect x="4" y="4" width="732" height="342" rx="14"
+                fill="none" stroke="#1e4080" strokeWidth="2"/>
+              <text x="16" y="22" fill="#4a7aad" fontSize="12" fontWeight="800"
+                fontFamily="Nunito,sans-serif">Numbers 1 to 20</text>
+
+              {/* Circle A — Multiples of 2 (blue) */}
+              <circle cx="250" cy="175" r="155"
+                fill="#4D96FF0d" stroke="#4D96FF" strokeWidth="3"
+                filter="url(#glowA)"/>
+              {/* Circle B — Multiples of 3 (orange) */}
+              <circle cx="480" cy="175" r="155"
+                fill="#FF922B0d" stroke="#FF922B" strokeWidth="3"
+                filter="url(#glowA)"/>
+              {/* Intersection teal fill: circle A clipped to circle B's area */}
+              <circle cx="250" cy="175" r="155"
+                fill="#20C99730" clipPath="url(#clipB)"/>
+
+              {/* Zone labels */}
+              <text x="155" y="58" fill="#4D96FF" fontSize="14" fontWeight="800"
+                fontFamily="Nunito,sans-serif" textAnchor="middle">Multiples</text>
+              <text x="155" y="76" fill="#4D96FF" fontSize="14" fontWeight="800"
+                fontFamily="Nunito,sans-serif" textAnchor="middle">of 2</text>
+
+              <text x="585" y="58" fill="#FF922B" fontSize="14" fontWeight="800"
+                fontFamily="Nunito,sans-serif" textAnchor="middle">Multiples</text>
+              <text x="585" y="76" fill="#FF922B" fontSize="14" fontWeight="800"
+                fontFamily="Nunito,sans-serif" textAnchor="middle">of 3</text>
+
+              <text x="365" y="118" fill="#20C997" fontSize="12" fontWeight="800"
+                fontFamily="Nunito,sans-serif" textAnchor="middle">BOTH</text>
+
+              {/* Answer-key number bubbles — only when showAnswers is true */}
+              {showAnswers && VENN_NUMS.map(n => {
+                const { x, y, zone } = VENN_SVG_POSITIONS[n];
+                const color = ZONE_COLOR[zone];
+                return (
+                  <g key={n}>
+                    <circle cx={x} cy={y} r={16}
+                      fill={color+"44"} stroke={color} strokeWidth="2"/>
+                    <text x={x} y={y + 5}
+                      textAnchor="middle" fill="#fff" fontSize="12" fontWeight="900"
+                      fontFamily="Nunito,sans-serif">
+                      {n}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {showAnswers && (
+              <p style={{ color:"#7fb3e0", fontSize:12, margin:"8px 0 0 0", textAlign:"center" }}>
+                🟦 Blue = multiples of 2 only &nbsp;|&nbsp;
+                🟩 Teal = both &nbsp;|&nbsp;
+                🟠 Orange = multiples of 3 only &nbsp;|&nbsp;
+                ⬜ Grey = neither
+              </p>
+            )}
+          </div>
+
+          {/* ── Drop zones ── */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            {zoneConfig.map(({ key, label, color }) => (
+              <div key={key}
+                onClick={() => handleZoneClick(key)}
+                style={{ ...S.zoneBox(!!sel, color), minHeight:110 }}>
+                <div style={{ ...S.zoneLabel, color }}>
+                  {key==="outside" ? "🚫" : key==="both" ? "⭐" : key==="onlyA" ? "🔵" : "🟠"} {label}
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8, paddingTop:28 }}>
+                  {zones[key].length === 0 && (
+                    <span style={S.zonePlaceholder}>Drop numbers here</span>
+                  )}
+                  {zones[key].map(n => (
+                    <Chip key={n} n={n}
+                      isSelected={sel?.num === n && sel?.fromKey === key}
+                      status={feedback?.[n]}
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleChipClick(n, "zone", key);
+                      }}/>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Number Bin ── */}
+          <div style={S.card}>
+            <p style={{ ...S.sectionTitle, marginBottom:10 }}>
+              📦 Number Bin — {bin.length} numbers left
+            </p>
+            <div style={S.bin} onClick={() => sel && handleZoneClick("bin")}>
+              {bin.length === 0
+                ? <span style={{ color:"#2a5090", fontStyle:"italic", fontSize:14 }}>
+                    All numbers have been placed! ✅
+                  </span>
+                : bin.map(n => (
+                  <Chip key={n} n={n}
+                    isSelected={sel?.num === n && sel?.from === "bin"}
+                    status={null}
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleChipClick(n, "bin", "bin");
+                    }}/>
+                ))}
+            </div>
+          </div>
+
+          {/* ── Controls ── */}
+          <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+            <button style={S.checkBtn} onClick={check} disabled={placed < 20}>
+              ✅ Check My Answers
+            </button>
+            <button style={S.resetBtn} onClick={reset}>🔄 Start Over</button>
+            <span style={{ color:"#4a7aad", fontSize:14 }}>{placed}/20 numbers placed</span>
+            {feedback && (
+              <div style={S.score(correct === placed)}>
+                {correct === placed
+                  ? `🌟 Perfect! All ${correct} correct!`
+                  : `${correct}/${placed} correct — wrong ones returned to bin!`}
+              </div>
+            )}
+          </div>
+
+          {/* ── Hint ── */}
+          <div style={{ ...S.card, background:"rgba(0,10,30,0.5)" }}>
+            <p style={{ ...S.sectionTitle, color:"#FFD93D" }}>💡 Hint</p>
+            <p style={{ color:"#7fb3e0", fontSize:13, margin:0 }}>
+              A number can be a multiple of BOTH 2 and 3 — those are multiples of 6!
+              Try: <strong style={{color:"#20C997"}}>6, 12, 18</strong> go in the
+              middle overlapping zone.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Carroll Activity ────────────────────────────────────────────────────── */
+    function CarrollActivity() {
+      const [bin,      setBin]      = useState([...CARROLL_NUMS]);
+      const [cells,    setCells]    = useState({ em:[], en:[], nm:[], nn:[] });
+      const [sel,      setSel]      = useState(null);
+      const [feedback, setFeedback] = useState(null);
+
+      const handleChipClick = (num, from, fromKey) => {
+        if (feedback) return;
+        if (sel?.num === num && sel?.fromKey === fromKey) { setSel(null); return; }
+        setSel({ num, from, fromKey });
+      };
+
+      const handleCellClick = (cellKey) => {
+        if (!sel || feedback) return;
+        const { num, from, fromKey } = sel;
+        if (from === "bin")
+          setBin(b => b.filter(x => x !== num));
+        else
+          setCells(c => ({ ...c, [fromKey]: c[fromKey].filter(x => x !== num) }));
+        if (cellKey === "bin")
+          setBin(b => [...b, num]);
+        else
+          setCells(c => ({ ...c, [cellKey]: [...c[cellKey], num] }));
+        setSel(null);
+      };
+
+      const check = () => {
+        const result = {};
+        ["em","en","nm","nn"].forEach(ck => {
+          cells[ck].forEach(n => {
+            result[n] = carrollCellOf(n) === ck ? "correct" : "wrong";
+          });
+        });
+        setFeedback(result);
+        setTimeout(() => {
+          const wrong = Object.entries(result)
+            .filter(([, v]) => v === "wrong")
+            .map(([k]) => +k);
+          if (wrong.length > 0) {
+            setCells(c => {
+              const nc = { em:[...c.em], en:[...c.en], nm:[...c.nm], nn:[...c.nn] };
+              ["em","en","nm","nn"].forEach(k => { nc[k] = nc[k].filter(n => !wrong.includes(n)); });
+              return nc;
+            });
+            setBin(b => [...b, ...wrong]);
+          }
+          setFeedback(null);
+        }, 2000);
+      };
+
+      const reset = () => {
+        setBin([...CARROLL_NUMS]);
+        setCells({ em:[], en:[], nm:[], nn:[] });
+        setSel(null); setFeedback(null);
+      };
+
+      const placed  = Object.values(cells).flat().length;
+      const correct = feedback
+        ? Object.values(feedback).filter(v => v === "correct").length
+        : 0;
+
+      const renderCell = (cellKey) => {
+        const nums = cells[cellKey];
+        return (
+          <td key={cellKey}
+            style={{ ...S.carrollTd(!!sel), verticalAlign:"top", minWidth:160 }}
+            onClick={() => handleCellClick(cellKey)}>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, minHeight:90, padding:4 }}>
+              {nums.length === 0 && (
+                <span style={{ color:"#2a5090", fontSize:12, fontStyle:"italic", marginTop:8 }}>
+                  Tap to place here
+                </span>
+              )}
+              {nums.map(n => (
+                <Chip key={n} n={n}
+                  isSelected={sel?.num === n && sel?.fromKey === cellKey}
+                  status={feedback?.[n]}
+                  onClick={e => { e.stopPropagation(); handleChipClick(n, "zone", cellKey); }}/>
+              ))}
+            </div>
+          </td>
+        );
+      };
+
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={S.card}>
+            <p style={S.sectionTitle}>Activity 2 — The Carroll Grid Challenge</p>
+            <p style={S.instruction}>
+              👆 <strong style={{color:"#fff"}}>Tap a number</strong> to select it, then
+              <strong style={{color:"#fff"}}> tap a cell</strong> in the Carroll diagram to place it.
+              Each number belongs in exactly ONE cell!
+            </p>
+            <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+              {[{t:"Even",          ex:"10, 12…",      c:"#4D96FF"},
+                {t:"Not Even (Odd)",ex:"11, 15…",      c:"#FF922B"},
+                {t:"Multiple of 3", ex:"12, 15, 18…",  c:"#20C997"},
+                {t:"Not a Multiple of 3",ex:"10, 11…", c:"#CC5DE8"}]
+                .map(({t,ex,c}) => (
+                  <div key={t} style={{
+                    background:`${c}18`, border:`1px solid ${c}44`,
+                    borderRadius:10, padding:"5px 12px",
+                  }}>
+                    <span style={{color:c, fontWeight:800, fontSize:12}}>{t}</span>
+                    <span style={{color:"#6a9acc", fontSize:12}}> — {ex}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div style={S.card}>
+            <table style={S.carrollTable}>
+              <thead>
+                <tr>
+                  <th style={{ ...S.carrollTh(null), background:"#071530", borderRight:"1px solid #1e4080" }}></th>
+                  <th style={S.carrollTh("even")}>🔵 Even</th>
+                  <th style={S.carrollTh("odd")}>🟠 Not Even (Odd)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ ...S.rowHeader, borderBottom:"1px solid #1e4080" }}>
+                    ✅ Multiple<br/>of 3
+                  </td>
+                  {renderCell("em")}
+                  {renderCell("nm")}
+                </tr>
+                <tr>
+                  <td style={S.rowHeader}>
+                    ❌ NOT a<br/>Multiple of 3
+                  </td>
+                  {renderCell("en")}
+                  {renderCell("nn")}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={S.card}>
+            <p style={{ ...S.sectionTitle, marginBottom:10 }}>
+              📦 Number List — {bin.length} left to sort
+            </p>
+            <div style={S.bin} onClick={() => sel && handleCellClick("bin")}>
+              {bin.length === 0
+                ? <span style={{color:"#2a5090", fontStyle:"italic", fontSize:14}}>
+                    All sorted! 🎉
+                  </span>
+                : bin.map(n => (
+                  <Chip key={n} n={n}
+                    isSelected={sel?.num === n && sel?.from === "bin"}
+                    status={null}
+                    onClick={e => { e.stopPropagation(); handleChipClick(n,"bin","bin"); }}/>
+                ))}
+            </div>
+          </div>
+
+          <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+            <button style={S.checkBtn} onClick={check} disabled={placed < 12}>
+              ✅ Check My Answers
+            </button>
+            <button style={S.resetBtn} onClick={reset}>🔄 Start Over</button>
+            <span style={{ color:"#4a7aad", fontSize:14 }}>{placed}/12 numbers placed</span>
+            {feedback && (
+              <div style={S.score(correct === placed)}>
+                {correct === placed
+                  ? `🌟 Perfect! All ${correct} correct!`
+                  : `${correct}/${placed} correct — wrong ones returned!`}
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...S.card, background:"rgba(0,10,30,0.5)" }}>
+            <p style={{ ...S.sectionTitle, color:"#FFD93D" }}>💡 Hint</p>
+            <p style={{ color:"#7fb3e0", fontSize:13, margin:0 }}>
+              Numbers like <strong style={{color:"#20C997"}}>12, 18, 24</strong> are
+              <strong style={{color:"#20C997"}}> both even AND multiples of 3</strong> — they go in the
+              top-left cell! Check: 12 ÷ 2 = 6 ✅ and 12 ÷ 3 = 4 ✅
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Review Activity ─────────────────────────────────────────────────────── */
+    function ReviewActivity() {
+      const [inputNum, setInputNum] = useState("");
+      const [target,   setTarget]   = useState(null);
+      const [chosen,   setChosen]   = useState(null);
+      const [result,   setResult]   = useState(null);
+      const [mode,     setMode]     = useState("venn");
+
+      const categories = [
+        { id:"onlyA",   label:"Multiples of 2 ONLY",      color:"#4D96FF", emoji:"🔵" },
+        { id:"both",    label:"Multiples of BOTH 2 and 3", color:"#20C997", emoji:"⭐" },
+        { id:"onlyB",   label:"Multiples of 3 ONLY",      color:"#FF922B", emoji:"🟠" },
+        { id:"outside", label:"Neither (not 2 or 3)",      color:"#aaa",    emoji:"🚫" },
+      ];
+      const carrollCats = [
+        { id:"em", label:"Even + Multiple of 3",     color:"#20C997", emoji:"⭐" },
+        { id:"en", label:"Even + NOT Multiple of 3", color:"#4D96FF", emoji:"🔵" },
+        { id:"nm", label:"Odd + Multiple of 3",      color:"#FF922B", emoji:"🟠" },
+        { id:"nn", label:"Odd + NOT Multiple of 3",  color:"#aaa",    emoji:"🚫" },
+      ];
+
+      const catList = mode === "venn" ? categories : carrollCats;
+
+      const load = () => {
+        const n = parseInt(inputNum);
+        if (isNaN(n) || n < 1 || n > 100) return;
+        setTarget(n); setChosen(null); setResult(null);
+      };
+
+      const random = () => {
+        const n = Math.floor(Math.random() * 30) + 1;
+        setTarget(n); setInputNum(String(n)); setChosen(null); setResult(null);
+      };
+
+      const answer = (id) => {
+        if (!target || result) return;
+        setChosen(id);
+        const correctZone = mode === "venn" ? vennZoneOf(target) : carrollCellOf(target);
+        setResult(id === correctZone ? "correct" : "wrong");
+      };
+
+      const colorIdx = target ? (target % 20 || 20) : 1;
+
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={S.card}>
+            <p style={S.sectionTitle}>Review &amp; Create Your Own</p>
+            <p style={S.instruction}>
+              The teacher types a number. Students tap the correct category!
+            </p>
+
+            {/* Mode selector */}
+            <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+              {[{id:"venn",label:"🔵 Venn Mode"},{id:"carroll",label:"📊 Carroll Mode"}].map(m => (
+                <button key={m.id}
+                  onClick={() => { setMode(m.id); setTarget(null); setChosen(null); setResult(null); }}
+                  style={{
+                    padding:"10px 20px", borderRadius:12, border:"none", cursor:"pointer",
+                    background: mode === m.id
+                      ? "linear-gradient(135deg,#00c6ff,#0072ff)"
+                      : "rgba(255,255,255,0.08)",
+                    color:"#fff", fontWeight:800, fontSize:14,
+                  }}>{m.label}</button>
+              ))}
+            </div>
+
+            {/* Number input */}
+            <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+              <input
+                type="number" min="1" max="100"
+                value={inputNum}
+                onChange={e => setInputNum(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && load()}
+                placeholder="Type a number (1–100)"
+                style={{
+                  background:"rgba(0,30,80,0.8)", border:"2px solid #1e4080",
+                  borderRadius:12, color:"#fff", fontSize:20, padding:"12px 18px",
+                  outline:"none", width:220, fontFamily:"inherit", fontWeight:700,
+                }}/>
+              <button style={S.checkBtn} onClick={load}>Show Number</button>
+              <button
+                style={{ ...S.checkBtn, background:"linear-gradient(135deg,#7209b7,#4361ee)" }}
+                onClick={random}>
+                🎲 Random!
+              </button>
+            </div>
+          </div>
+
+          {/* Target number display */}
+          {target && (
+            <div style={{ ...S.card, textAlign:"center" }}>
+              <p style={{ color:"#7fb3e0", fontSize:14, margin:"0 0 12px 0", fontWeight:700 }}>
+                Where does this number belong?
+              </p>
+              <div style={{
+                width:120, height:120, borderRadius:24, margin:"0 auto 20px",
+                background:`${chipColor(colorIdx)}22`,
+                border:`4px solid ${chipColor(colorIdx)}`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:52, fontWeight:900, color:chipColor(colorIdx),
+                boxShadow:`0 0 40px ${chipColor(colorIdx)}44`,
+              }}>{target}</div>
+
+              {/* Fact strip */}
+              <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap", marginBottom:20 }}>
+                {[
+                  { label: target%2===0 ? "✅ Even" : "❌ Odd",          color:"#4D96FF" },
+                  { label: target%3===0 ? "✅ Multiple of 3" : "❌ Not ×3", color:"#FF922B" },
+                ].map(({label,color}) => (
+                  <div key={label} style={{
+                    background:`${color}18`, border:`1px solid ${color}55`,
+                    borderRadius:10, padding:"6px 16px", color, fontWeight:800, fontSize:14,
+                  }}>{label}</div>
+                ))}
+              </div>
+
+              {/* Category buttons */}
+              <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+                {catList.map(cat => {
+                  const isChosen   = chosen === cat.id;
+                  const correctZone = mode==="venn" ? vennZoneOf(target) : carrollCellOf(target);
+                  const isCorrect  = cat.id === correctZone;
+                  let bg     = `${cat.color}15`;
+                  let border = `2px solid ${cat.color}44`;
+                  let color  = cat.color;
+                  if (result && isChosen) {
+                    bg     = result==="correct" ? "#1a5e3380" : "#5e1a1a80";
+                    border = `3px solid ${result==="correct" ? "#2ecc71" : "#e74c3c"}`;
+                    color  = result==="correct" ? "#2ecc71" : "#e74c3c";
+                  } else if (result && isCorrect && !isChosen) {
+                    bg = "#1a5e3350"; border="3px solid #2ecc71"; color="#2ecc71";
+                  }
+                  return (
+                    <button key={cat.id} onClick={() => answer(cat.id)}
+                      disabled={!!result}
+                      style={{
+                        background:bg, border, color, borderRadius:14,
+                        padding:"14px 20px", fontSize:14, fontWeight:800,
+                        cursor:result?"default":"pointer", transition:"all .2s",
+                        minWidth:180, fontFamily:"inherit",
+                      }}>
+                      {cat.emoji} {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {result && (
+                <div style={{
+                  marginTop:20, fontSize:22, fontWeight:900,
+                  color: result==="correct" ? "#2ecc71" : "#e74c3c",
+                }}>
+                  {result==="correct"
+                    ? "🌟 Excellent! That is correct!"
+                    : "❌ Not quite! The correct answer is highlighted in green."}
+                </div>
+              )}
+              {result && (
+                <button style={{ ...S.checkBtn, marginTop:16 }}
+                  onClick={() => { setTarget(null); setInputNum(""); setChosen(null); setResult(null); }}>
+                  Next Number →
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Quick reference */}
+          <div style={S.card}>
+            <p style={{ ...S.sectionTitle, color:"#FFD93D" }}>📚 Quick Reference</p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              {[
+                { title:"Multiples of 2 (Even)", body:"End in 0, 2, 4, 6, or 8\ne.g. 2, 4, 6, 8, 10, 12…", color:"#4D96FF" },
+                { title:"Multiples of 3",         body:"Digits add up to 3, 6, or 9\ne.g. 3, 6, 9, 12, 15, 18…", color:"#FF922B" },
+                { title:"Multiples of BOTH 2 and 3", body:"These are multiples of 6\ne.g. 6, 12, 18, 24, 30…", color:"#20C997" },
+                { title:"Neither",                body:"Odd AND not a multiple of 3\ne.g. 1, 5, 7, 11, 13, 17…", color:"#aaa" },
+              ].map(({title,body,color}) => (
+                <div key={title} style={{
+                  background:`${color}10`, border:`1px solid ${color}44`,
+                  borderRadius:12, padding:14,
+                }}>
+                  <p style={{ color, fontWeight:800, margin:"0 0 6px 0" }}>{title}</p>
+                  <p style={{ color:"#7fb3e0", fontSize:13, margin:0, whiteSpace:"pre-line" }}>{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Intro / Home slide ──────────────────────────────────────────────────── */
+    function IntroSlide({ onStart }) {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+          {/* Hero banner */}
+          <div style={{
+            ...S.card,
+            background:"linear-gradient(135deg,#0d2e6b,#0a3d7a)",
+            border:"1px solid #1e4d9a",
+            textAlign:"center", padding:"44px 28px 36px",
+          }}>
+            <div style={{
+              display:"inline-block",
+              background:"linear-gradient(135deg,#00c6ff,#0072ff)",
+              borderRadius:16, padding:"7px 22px", marginBottom:18,
+              fontSize:13, fontWeight:800, color:"#fff",
+              letterSpacing:1, textTransform:"uppercase",
+              boxShadow:"0 4px 16px rgba(0,114,255,0.4)",
+            }}>
+              Cambridge Primary Mathematics
+            </div>
+
+            <h1 style={{ color:"#fff", fontSize:34, fontWeight:900, margin:"0 0 10px 0",
+              lineHeight:1.2 }}>
+              Venn &amp; Carroll<br/>Diagrams
+            </h1>
+
+            <p style={{ color:"#7fb3e0", fontSize:18, margin:"0 0 28px 0", fontWeight:700 }}>
+              Unit 10.2 &nbsp;·&nbsp; Pages 162–163
+            </p>
+
+            <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap", marginBottom:28 }}>
+              {[{label:"Grade 3",    color:"#4D96FF"},
+                {label:"ESL",        color:"#FF922B"},
+                {label:"Mathematics",color:"#20C997"}]
+                .map(({label,color}) => (
+                  <div key={label} style={{
+                    background:`${color}22`, border:`1px solid ${color}55`,
+                    borderRadius:10, padding:"8px 22px",
+                    color, fontWeight:800, fontSize:15,
+                  }}>{label}</div>
+                ))}
+            </div>
+
+            <button
+              onClick={() => onStart("venn")}
+              style={{
+                background:"linear-gradient(135deg,#00c6ff,#0072ff)",
+                color:"#fff", border:"none", borderRadius:16,
+                padding:"16px 44px", fontSize:18, fontWeight:900,
+                cursor:"pointer", boxShadow:"0 6px 24px rgba(0,114,255,0.5)",
+                letterSpacing:0.5,
+              }}>
+              ▶ Start Activity 1
+            </button>
+          </div>
+
+          {/* Learning objectives */}
+          <div style={S.card}>
+            <p style={S.sectionTitle}>🎯 Learning Objectives</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {[
+                "Sort numbers into groups based on their properties (multiples of 2 and 3)",
+                "Read and create Venn diagrams using two overlapping circles",
+                "Read and create Carroll diagrams using a 2 × 2 sorting grid",
+                "Identify numbers that satisfy both, one, or neither condition",
+              ].map((obj, i) => (
+                <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                  <div style={{
+                    minWidth:28, height:28, borderRadius:8, flexShrink:0,
+                    background:"linear-gradient(135deg,#00c6ff,#0072ff)",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    color:"#fff", fontWeight:900, fontSize:14,
+                  }}>{i + 1}</div>
+                  <p style={{ color:"#a8c8f0", margin:0, fontSize:15, lineHeight:1.55, paddingTop:3 }}>
+                    {obj}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Activity previews */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            <div style={{
+              ...S.card,
+              background:"rgba(77,150,255,0.10)", border:"1px solid #4D96FF33",
+            }}>
+              <p style={{ ...S.sectionTitle, color:"#4D96FF" }}>⭕ Activity 1</p>
+              <p style={{ color:"#fff", fontWeight:800, fontSize:15, margin:"0 0 6px 0" }}>
+                The Venn Master
+              </p>
+              <p style={{ color:"#a8c8f0", fontSize:13, margin:0, lineHeight:1.6 }}>
+                Sort numbers 1–20 into overlapping circles. Find which belong to multiples of 2,
+                multiples of 3, both, or neither.
+              </p>
+            </div>
+            <div style={{
+              ...S.card,
+              background:"rgba(255,146,43,0.10)", border:"1px solid #FF922B33",
+            }}>
+              <p style={{ ...S.sectionTitle, color:"#FF922B" }}>📊 Activity 2</p>
+              <p style={{ color:"#fff", fontWeight:800, fontSize:15, margin:"0 0 6px 0" }}>
+                The Carroll Grid Challenge
+              </p>
+              <p style={{ color:"#a8c8f0", fontSize:13, margin:0, lineHeight:1.6 }}>
+                Sort numbers into a 2 × 2 grid using "even / odd" and "multiple of 3 / not" rules.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Main App ────────────────────────────────────────────────────────────── */
+    function MathLesson() {
+      const [tab, setTab] = useState("intro");
+
+      const tabs = [
+        { id:"intro",   icon:"🏠", label:"Home"    },
+        { id:"venn",    icon:"⭕", label:"Venn"    },
+        { id:"carroll", icon:"📊", label:"Carroll" },
+        { id:"review",  icon:"🌟", label:"Review"  },
+      ];
+
+      const headerText = {
+        intro:   { title:"Venn & Carroll Diagrams",  sub:"Cambridge Primary Mathematics · Pages 162–163" },
+        venn:    { title:"Venn Diagrams",             sub:"Sort numbers 1–20 using overlapping circles." },
+        carroll: { title:"Carroll Diagrams",          sub:"Sort numbers into a 2 × 2 grid." },
+        review:  { title:"Review & Practice",         sub:"Test yourself! Tap the correct category for each number." },
+      };
+      const { title, sub } = headerText[tab];
+
+      return (
+        <div style={S.app}>
+
+          {/* ── Left navigation (sticky — always visible on scroll) ── */}
+          <nav style={S.nav}>
+            <div style={S.navLogo}>📐</div>
+            {tabs.map(t => (
+              <button key={t.id} style={S.navBtn(tab === t.id)}
+                onClick={() => setTab(t.id)}>
+                <span style={S.navIcon}>{t.icon}</span>
+                {t.label}
+              </button>
+            ))}
+            <div style={{ flex:1 }}/>
+            <div style={{
+              color:"#1e3a6e", fontSize:9, textAlign:"center",
+              padding:"8px 4px 12px", letterSpacing:.5, lineHeight:1.5, flexShrink:0,
+            }}>
+              Cambridge<br/>Primary<br/>Maths<br/>10.2
+            </div>
+          </nav>
+
+          {/* ── Main content ── */}
+          <main style={S.content}>
+            {/* Page header */}
+            <div style={S.header}>
+              <div>
+                <div style={S.headerBadge}>Grade 3 · Unit 10.2</div>
+                <h1 style={S.headerTitle}>{title}</h1>
+                <p style={S.headerSub}>{sub}</p>
+              </div>
+            </div>
+
+            {/* Tab content */}
+            {tab === "intro"   && <IntroSlide onStart={setTab} />}
+            {tab === "venn"    && <VennActivity />}
+            {tab === "carroll" && <CarrollActivity />}
+            {tab === "review"  && <ReviewActivity />}
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<MathLesson />);
+  </script>
+</body>
+</html>
